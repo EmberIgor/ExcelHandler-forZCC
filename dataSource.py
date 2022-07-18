@@ -22,7 +22,7 @@ def get_excel_list():
     all_item_list = os.listdir('.')
     excel_list = []
     for item in all_item_list:
-        item_matcher = re.match('.+.xlsx$', item)
+        item_matcher = re.match('^(?!~\\$).+.xlsx$|^(?!~\\$).+.xlsm$', item)
         if item_matcher is not None:
             excel_list.append({
                 'name': item_matcher.group(),
@@ -39,11 +39,12 @@ def load_excel(excel_name):
     """
     wb = openpyxl.load_workbook(filename=excel_name)
     excel_detail = {
+        "excelName": excel_name,
         "sheetList": []
     }
     for sheet_item in wb.sheetnames:
         if re.match('^\\d+$', sheet_item) is not None:
-            load_sheet(sheet_item, wb)
+            excel_detail["sheetList"].append(load_sheet(sheet_item, wb))
     return excel_detail
 
 
@@ -126,6 +127,12 @@ def load_sheet(sheet_name, wb):
             if current_row[prop_idx + differences_field_info['col_idx'] - 1].value == 'X':
                 differences_item['different'].append(header_row[prop_idx + differences_field_info['col_idx'] - 1].value)
             prop_idx += 1
+        # 写入reasonCell
+        differences_item['reasonCell'] = current_row[reason_field_info['col_idx'] - 1]
         current_idx += 1
         current_row = sheet[f"{automatic_extraction_field_info['row'] + 2 + current_idx}"]
-    print(differences_item)
+    differences_list.append(differences_item)
+    return {
+        'sheetName': sheet_name,
+        'differencesList': differences_list
+    }
