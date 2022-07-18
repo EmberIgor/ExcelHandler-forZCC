@@ -35,7 +35,7 @@ def load_excel(excel_name):
     """
     加载excel数据
     :param excel_name: excel文件全名
-    :return: excel概况、各条目信息
+    :return: excel概况、各表信息
     """
     wb = openpyxl.load_workbook(filename=excel_name)
     excel_detail = {
@@ -129,6 +129,7 @@ def load_sheet(sheet_name, wb):
             prop_idx += 1
         # 写入reasonCell
         differences_item['reasonCell'] = current_row[reason_field_info['col_idx'] - 1]
+        # 迭代
         current_idx += 1
         current_row = sheet[f"{automatic_extraction_field_info['row'] + 2 + current_idx}"]
     differences_list.append(differences_item)
