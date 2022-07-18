@@ -2,5 +2,5 @@ import openpyxl
 import dataSource
 
 if __name__ == '__main__':
-    print('hello')
-
+    dataSource.get_excel_list()
+    dataSource.load_excel('testExcel.xlsx')
