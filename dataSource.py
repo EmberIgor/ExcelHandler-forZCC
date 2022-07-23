@@ -7,11 +7,11 @@ from openpyxl.cell import MergedCell
 
 
 class Fields(Enum):
-    idField = '申请番号'
-    automaticExtractionField = '数据A'
-    dataField = '数据B'
-    differencesField = '差异'
-    reasonField = '原因'
+    idField = '申請番号'
+    automaticExtractionField = '申請書に記載された内容（マクロ自動抽出）'
+    dataField = 'SAP仕入先一覧'
+    differencesField = '相違箇所自動判定'
+    reasonField = '再鑑者コメント'
 
 
 def get_excel_list():
@@ -39,12 +39,13 @@ def load_excel(excel_name):
     """
     wb = openpyxl.load_workbook(filename=excel_name)
     excel_detail = {
+        "workBook": wb,
         "excelName": excel_name,
-        "sheetList": []
+        "reappraisalResult": {}
     }
     for sheet_item in wb.sheetnames:
-        if re.match('^\\d+$', sheet_item) is not None:
-            excel_detail["sheetList"].append(load_sheet(sheet_item, wb))
+        if sheet_item == '再鑑結果':
+            excel_detail["reappraisalResult"] = load_sheet(sheet_item, wb)
     return excel_detail
 
 
@@ -87,6 +88,12 @@ def load_sheet(sheet_name, wb):
                 if None not in [automatic_extraction_field_info, id_field_info, data_field_info, reason_field_info,
                                 differences_field_info]:
                     break
+    if None in [automatic_extraction_field_info, id_field_info, data_field_info, reason_field_info,
+                differences_field_info]:
+        return {
+            'sheetName': sheet_name,
+            'differencesList': []
+        }
     # 获取条目属性
     header_row = sheet[f"{automatic_extraction_field_info['row'] + 1}"]
     raw_data_props = []
@@ -98,7 +105,7 @@ def load_sheet(sheet_name, wb):
     differences_props = []
     for cell in header_row[differences_field_info['col_idx'] - 1:reason_field_info['col_idx'] - 1]:
         differences_props.append(cell.value)
-    # 获取原数据
+    # 获取数据
     current_idx = 0
     current_row = sheet[f"{automatic_extraction_field_info['row'] + 2 + current_idx}"]
     while re.match('\\d+', str(current_row[id_field_info['col_idx'] - 1].value)) is not None:
@@ -124,7 +131,7 @@ def load_sheet(sheet_name, wb):
         # 写入差异点
         prop_idx = 0
         for prop in differences_props:
-            if current_row[prop_idx + differences_field_info['col_idx'] - 1].value == 'X':
+            if current_row[prop_idx + differences_field_info['col_idx'] - 1].value == '×':
                 differences_item['different'].append(header_row[prop_idx + differences_field_info['col_idx'] - 1].value)
             prop_idx += 1
         # 写入reasonCell
@@ -132,7 +139,7 @@ def load_sheet(sheet_name, wb):
         # 迭代
         current_idx += 1
         current_row = sheet[f"{automatic_extraction_field_info['row'] + 2 + current_idx}"]
-    differences_list.append(differences_item)
+        differences_list.append(differences_item)
     return {
         'sheetName': sheet_name,
         'differencesList': differences_list
