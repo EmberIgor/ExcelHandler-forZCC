@@ -54,7 +54,7 @@ def handle_reappraisal_result_list(excelDetail):
         excelDetail['workBook'].save(filename=excelDetail['excelName'])
 
 
-def handle_excel(excel_list):
+def handle_target_excel(excel_list):
     for excel_list_item in excel_list:
         excelDetail = dataSource.load_excel(excel_list_item['name'])
         print(excelDetail)
@@ -63,4 +63,4 @@ def handle_excel(excel_list):
 
 
 if __name__ == '__main__':
-    handle_excel(dataSource.get_excel_list())
+    handle_target_excel(dataSource.get_excel_list())
