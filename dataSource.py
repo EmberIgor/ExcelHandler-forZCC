@@ -1,13 +1,12 @@
 import openpyxl
 import os
 import re
-import gc
 from enum import Enum
 
 from openpyxl.cell import MergedCell
 
 
-class Target_Fields(Enum):
+class TargetFields(Enum):
     """待修改Excel表头名称"""
     idField = '申請番号'
     automaticExtractionField = '申請書に記載された内容（マクロ自動抽出）'
@@ -40,7 +39,7 @@ def load_excel(excel_name):
     :param excel_name: excle名称
     :return: excel详情
     """
-    excelDetail = {
+    excel_detail = {
         "workBook": None,
         "type": "other",
         "excelName": excel_name,
@@ -49,11 +48,11 @@ def load_excel(excel_name):
     wb = openpyxl.load_workbook(filename=excel_name)
     for sheet_item in wb.sheetnames:
         if sheet_item == '再鑑結果':
-            excelDetail = load_target_excel(excel_name, wb)
+            excel_detail = load_target_excel(excel_name, wb)
             break
         elif sheet_item == '【国内】':
             break
-    return excelDetail
+    return excel_detail
 
 
 def load_target_excel(excel_name, wb):
@@ -82,8 +81,8 @@ def load_reappraisal_result_sheet(wb):
     sheet_name = '再鑑結果'
     sheet = wb[sheet_name]
     differences_list = []
-    requestItemList = []
-    fieldsInfo = {
+    request_item_list = []
+    fields_info = {
         "automaticExtractionField": None,
         "idField": None,
         "dataField": None,
@@ -93,7 +92,7 @@ def load_reappraisal_result_sheet(wb):
     }
     # 下面这个循环用于获取表头坐标
     for row in sheet.iter_rows(min_row=1, max_row=sheet.max_row, min_col=1, max_col=sheet.max_column):
-        if None not in fieldsInfo.values():
+        if None not in fields_info.values():
             break
         for cell in row:
             if cell is not None and not isinstance(cell, MergedCell):
@@ -102,35 +101,35 @@ def load_reappraisal_result_sheet(wb):
                     'col_idx': cell.col_idx,
                     'row': cell.row
                 }
-                for key, value in fieldsInfo.items():
-                    if cell.value == Target_Fields[key].value:
-                        fieldsInfo[key] = cell_info
-                if None not in fieldsInfo.values():
+                for key, value in fields_info.items():
+                    if cell.value == TargetFields[key].value:
+                        fields_info[key] = cell_info
+                if None not in fields_info.values():
                     break
-    if None in fieldsInfo.values():
+    if None in fields_info.values():
         return {
             'sheetName': sheet_name,
             'differencesList': [],
-            'requestList': requestItemList
+            'requestList': request_item_list
         }
     # 获取条目属性
-    header_row = sheet[f"{fieldsInfo['automaticExtractionField']['row'] + 1}"]
+    header_row = sheet[f"{fields_info['automaticExtractionField']['row'] + 1}"]
     raw_data_props = []
     for cell in header_row[
-                fieldsInfo['automaticExtractionField']['col_idx'] - 1:fieldsInfo['dataField']['col_idx'] - 1]:
+                fields_info['automaticExtractionField']['col_idx'] - 1:fields_info['dataField']['col_idx'] - 1]:
         raw_data_props.append(cell.value)
     data_props = []
-    for cell in header_row[fieldsInfo['dataField']['col_idx'] - 1:fieldsInfo['differencesField']['col_idx'] - 1]:
+    for cell in header_row[fields_info['dataField']['col_idx'] - 1:fields_info['differencesField']['col_idx'] - 1]:
         data_props.append(cell.value)
     differences_props = []
-    for cell in header_row[fieldsInfo['differencesField']['col_idx'] - 1:fieldsInfo['reasonField']['col_idx'] - 1]:
+    for cell in header_row[fields_info['differencesField']['col_idx'] - 1:fields_info['reasonField']['col_idx'] - 1]:
         differences_props.append(cell.value)
     # 获取差异数据
     current_idx = 0
-    current_row = sheet[f"{fieldsInfo['automaticExtractionField']['row'] + 2 + current_idx}"]
-    while re.match('\\d+', str(current_row[fieldsInfo['idField']['col_idx'] - 1].value)) is not None:
+    current_row = sheet[f"{fields_info['automaticExtractionField']['row'] + 2 + current_idx}"]
+    while re.match('\\d+', str(current_row[fields_info['idField']['col_idx'] - 1].value)) is not None:
         differences_item = {
-            Target_Fields.idField.value: str(current_row[fieldsInfo['idField']['col_idx'] - 1].value),
+            TargetFields.idField.value: str(current_row[fields_info['idField']['col_idx'] - 1].value),
             'rawData': {},
             'data': {},
             'different': [],
@@ -141,41 +140,41 @@ def load_reappraisal_result_sheet(wb):
         prop_idx = 0
         for prop in raw_data_props:
             differences_item['rawData'][prop] = current_row[
-                prop_idx + fieldsInfo['automaticExtractionField']['col_idx'] - 1].value
+                prop_idx + fields_info['automaticExtractionField']['col_idx'] - 1].value
             prop_idx += 1
         # 写入现数据
         prop_idx = 0
         for prop in data_props:
-            differences_item['data'][prop] = current_row[prop_idx + fieldsInfo['dataField']['col_idx'] - 1].value
+            differences_item['data'][prop] = current_row[prop_idx + fields_info['dataField']['col_idx'] - 1].value
             prop_idx += 1
         # 写入差异点
         prop_idx = 0
-        for prop in differences_props:
-            if current_row[prop_idx + fieldsInfo['differencesField']['col_idx'] - 1].value == '×':
+        for i in range(len(differences_props)):
+            if current_row[prop_idx + fields_info['differencesField']['col_idx'] - 1].value == '×':
                 differences_item['different'].append(
-                    header_row[prop_idx + fieldsInfo['differencesField']['col_idx'] - 1].value)
+                    header_row[prop_idx + fields_info['differencesField']['col_idx'] - 1].value)
             prop_idx += 1
         # 写入reasonCell
-        differences_item['reasonCell'] = current_row[fieldsInfo['reasonField']['col_idx'] - 1]
+        differences_item['reasonCell'] = current_row[fields_info['reasonField']['col_idx'] - 1]
         # 迭代
         current_idx += 1
-        current_row = sheet[f"{fieldsInfo['automaticExtractionField']['row'] + 2 + current_idx}"]
+        current_row = sheet[f"{fields_info['automaticExtractionField']['row'] + 2 + current_idx}"]
         differences_list.append(differences_item)
     # 获取“本日が更新日の取引先の申請件数”
     current_idx = 0
-    current_row = sheet[f"{fieldsInfo['supplierField']['row'] + 1 + current_idx}"]
-    print(fieldsInfo['idField'])
-    while re.match('\\d+', str(current_row[fieldsInfo['idField']['col_idx'] - 1].value)) is not None:
-        requestItem = {
-            "id": str(current_row[fieldsInfo['idField']['col_idx'] - 1].value),
-            "type": str(current_row[fieldsInfo['idField']['col_idx']].value),
-            "reason": current_row[fieldsInfo['idField']['col_idx'] + 1]
+    current_row = sheet[f"{fields_info['supplierField']['row'] + 1 + current_idx}"]
+    print(fields_info['idField'])
+    while re.match('\\d+', str(current_row[fields_info['idField']['col_idx'] - 1].value)) is not None:
+        request_item = {
+            "id": str(current_row[fields_info['idField']['col_idx'] - 1].value),
+            "type": str(current_row[fields_info['idField']['col_idx']].value),
+            "reason": current_row[fields_info['idField']['col_idx'] + 1]
         }
-        requestItemList.append(requestItem)
+        request_item_list.append(request_item)
         current_idx += 1
-        current_row = sheet[f"{fieldsInfo['supplierField']['row'] + 1 + current_idx}"]
+        current_row = sheet[f"{fields_info['supplierField']['row'] + 1 + current_idx}"]
     return {
         'sheetName': sheet_name,
         'differencesList': differences_list,
-        'requestList': requestItemList
+        'requestList': request_item_list
     }
