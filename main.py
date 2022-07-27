@@ -58,8 +58,13 @@ def handle_target_excel(excel_list):
     for excel_list_item in excel_list:
         excel_detail = dataSource.load_excel(excel_list_item['name'])
         print(excel_detail)
-        if excel_detail['reappraisalResult'] is not {}:
-            handle_reappraisal_result_list(excel_detail)
+        if excel_detail['type'] == 'reappraisalResult':
+            if excel_detail['reappraisalResult'] is not {}:
+                handle_reappraisal_result_list(excel_detail)
+        elif excel_detail['type'] == 'manage':
+            pass
+        else:
+            pass
 
 
 if __name__ == '__main__':

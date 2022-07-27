@@ -50,7 +50,8 @@ def load_excel(excel_name):
         if sheet_item == '再鑑結果':
             excel_detail = load_target_excel(excel_name, wb)
             break
-        elif sheet_item == '【国内】':
+        elif sheet_item == '国内':
+            excel_detail = load_manage_excel(excel_name, wb)
             break
     return excel_detail
 
@@ -69,6 +70,15 @@ def load_manage_excel(excel_name, wb):
         "domesticData": [],
         "foreignData": [],
     }
+    # 加载国内sheet
+    domestic_sheet = wb.get_sheet_by_name('国内')
+    for row in domestic_sheet.iter_rows(min_row=2, max_row=domestic_sheet.max_row, min_col=1,
+                                        max_col=domestic_sheet.max_column):
+        temp_domestic_data = {}
+        for cell in row:
+            if cell is not None and not isinstance(cell, MergedCell):
+                print(cell.col_idx)
+
     return excel_detail
 
 
@@ -79,7 +89,6 @@ def load_target_excel(excel_name, wb):
     :param excel_name: excel文件全名
     :return: excel概况、再鑑結果sheet内容
     """
-    # wb = openpyxl.load_workbook(filename=excel_name)
     excel_detail = {
         "workBook": wb,
         "type": "reappraisalResult",
