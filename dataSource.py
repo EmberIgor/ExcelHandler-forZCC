@@ -55,6 +55,23 @@ def load_excel(excel_name):
     return excel_detail
 
 
+def load_manage_excel(excel_name, wb):
+    """
+    加载管理excel数据
+    :param wb: workBook
+    :param excel_name: excel文件全名
+    :return: excel概况、管理sheet内容
+    """
+    excel_detail = {
+        "workBook": wb,
+        "type": "manage",
+        "excelName": excel_name,
+        "domesticData": [],
+        "foreignData": [],
+    }
+    return excel_detail
+
+
 def load_target_excel(excel_name, wb):
     """
     加载待修改excel数据
