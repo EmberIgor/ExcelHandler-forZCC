@@ -36,7 +36,7 @@ def get_excel_list():
 def load_excel(excel_name):
     """
     分拣并读取excel
-    :param excel_name: excle名称
+    :param excel_name: excel名称
     :return: excel详情
     """
     excel_detail = {
@@ -69,16 +69,68 @@ def load_manage_excel(excel_name, wb):
         "excelName": excel_name,
         "domesticData": [],
         "foreignData": [],
+        "surroundingData": [],
     }
     # 加载国内sheet
     domestic_sheet = wb.get_sheet_by_name('国内')
-    for row in domestic_sheet.iter_rows(min_row=2, max_row=domestic_sheet.max_row, min_col=1,
-                                        max_col=domestic_sheet.max_column):
-        temp_domestic_data = {}
+    # 获取国内表头
+    domestic_header_list = []
+    domestic_header_row = domestic_sheet[2]
+    for domestic_header in domestic_header_row:
+        domestic_header_list.append(domestic_header.value)
+    # 获取国内数据
+    for row in domestic_sheet.iter_rows(min_row=3, max_row=domestic_sheet.max_row, min_col=1,
+                                        max_col=len(domestic_header_list)):
+        invalid_row = True
+        row_data = {}
         for cell in row:
-            if cell is not None and not isinstance(cell, MergedCell):
-                print(cell.col_idx)
-
+            if cell.value is not None:
+                invalid_row = False
+            row_data[domestic_header_list[cell.col_idx - 1]] = cell.value
+        if invalid_row:
+            break
+        else:
+            excel_detail['domesticData'].append(row_data)
+    # 加载国外sheet
+    foreign_sheet = wb.get_sheet_by_name('海外')
+    # 获取国外表头
+    foreign_header_list = []
+    foreign_header_row = foreign_sheet[2]
+    for foreign_header in foreign_header_row:
+        foreign_header_list.append(foreign_header.value)
+    # 获取国外数据
+    for row in foreign_sheet.iter_rows(min_row=3, max_row=foreign_sheet.max_row, min_col=1,
+                                       max_col=len(foreign_header_list)):
+        invalid_row = True
+        row_data = {}
+        for cell in row:
+            if cell.value is not None:
+                invalid_row = False
+            row_data[foreign_header_list[cell.col_idx - 1]] = cell.value
+        if invalid_row:
+            break
+        else:
+            excel_detail['foreignData'].append(row_data)
+    # 加载周边sheet
+    surrounding_sheet = wb.get_sheet_by_name('周辺')
+    # 获取周边表头
+    surrounding_header_list = []
+    surrounding_header_row = surrounding_sheet[1]
+    for surrounding_header in surrounding_header_row:
+        surrounding_header_list.append(surrounding_header.value)
+    # 获取周边数据
+    for row in surrounding_sheet.iter_rows(min_row=3, max_row=surrounding_sheet.max_row, min_col=1,
+                                           max_col=len(surrounding_header_list)):
+        invalid_row = True
+        row_data = {}
+        for cell in row:
+            if cell.value is not None:
+                invalid_row = False
+            row_data[surrounding_header_list[cell.col_idx - 1]] = cell.value
+        if invalid_row:
+            break
+        else:
+            excel_detail['surroundingData'].append(row_data)
     return excel_detail
 
 
@@ -189,7 +241,6 @@ def load_reappraisal_result_sheet(wb):
     # 获取“本日が更新日の取引先の申請件数”
     current_idx = 0
     current_row = sheet[f"{fields_info['supplierField']['row'] + 1 + current_idx}"]
-    print(fields_info['idField'])
     while re.match('\\d+', str(current_row[fields_info['idField']['col_idx'] - 1].value)) is not None:
         request_item = {
             "id": str(current_row[fields_info['idField']['col_idx'] - 1].value),
