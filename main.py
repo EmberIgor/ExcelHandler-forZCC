@@ -1,5 +1,8 @@
+import os
+
 import dataSource
 import time
+from tqdm import tqdm
 
 # 管理表数据
 manage_excel_data = {
@@ -9,6 +12,9 @@ manage_excel_data = {
 }
 # 待处理的目标表
 target_excel_list = []
+
+# 被跳过的文件
+skip_file_list = []
 
 
 def check_comp(raw_data, data):
@@ -64,7 +70,7 @@ def check_reserved_case(request_item):
                     query_count = query_count + 1
     for foreign_item in manage_excel_data['foreignData']:
         if int(foreign_item['取引先番号\n必須']) == int(request_item['id']):
-            if domestic_item['受付日'] is not None:
+            if foreign_item['受付日'] is not None:
                 if foreign_item['受付日'].strftime("%Y-%m-%d") != time.strftime("%Y-%m-%d", time.localtime()):
                     check_result['isReserved'] = True
                     check_result['reason'] = "保留の件を処理したケース"
@@ -118,7 +124,7 @@ def check_change_case(request_item):
     return check_result
 
 
-# 检查"申請書依頼の指示に基づき処理したケース（一回目処理しますが、チェックする時、問題あり否認します）"和"申請書依頼の指示に基づき処理したケース（二回目処理しますが、チェックする時、問題あり否認します）"
+# 检查"申請書依頼の指示に基づき処理したケース（一回目処理しますが、チェックする時、問題あり否認します）"和"申請書依頼の指示に基づき処理したケース（一回目処理しますが、チェックする時、問題あり保留します）"
 def check_preliminary(request_item):
     # 检查结果
     check_result = {
@@ -134,12 +140,35 @@ def check_preliminary(request_item):
                 return check_result
             elif domestic_item['初鑑\nステータス'] == '保留':
                 check_result['isReserved'] = True
-                check_result['reason'] = "申請書依頼の指示に基づき処理したケース（二回目処理しますが、チェックする時、問題あり否認します）"
+                check_result['reason'] = "申請書依頼の指示に基づき処理したケース（一回目処理しますが、チェックする時、問題あり保留します）"
+                return check_result
+    # 检查国外数据
+    for foreign_item in manage_excel_data['foreignData']:
+        if int(foreign_item['取引先番号\n必須']) == int(request_item['id']):
+            if foreign_item['初鑑\nステータス'] == '否認済':
+                check_result['isReserved'] = True
+                check_result['reason'] = "申請書依頼の指示に基づき処理したケース（一回目処理しますが、チェックする時、問題あり否認します）"
+                return check_result
+            elif foreign_item['初鑑\nステータス'] == '保留':
+                check_result['isReserved'] = True
+                check_result['reason'] = "申請書依頼の指示に基づき処理したケース（一回目処理しますが、チェックする時、問題あり保留します）"
+                return check_result
+    # 检查周边数据
+    for surrounding_item in manage_excel_data['surroundingData']:
+        if int(surrounding_item['申請番号必須']) == int(request_item['id']):
+            if surrounding_item['初鑑\nステータス'] == '否認済':
+                check_result['isReserved'] = True
+                check_result['reason'] = "申請書依頼の指示に基づき処理したケース（一回目処理しますが、チェックする時、問題あり否認します）"
+                return check_result
+            elif surrounding_item['初鑑\nステータス'] == '保留':
+                check_result['isReserved'] = True
+                check_result['reason'] = "申請書依頼の指示に基づき処理したケース（一回目処理しますが、チェックする時、問題あり保留します）"
                 return check_result
     return check_result
 
 
 def handle_reappraisal_result_list(excel_detail):
+    global skip_file_list
     result_list = excel_detail['reappraisalResult']['differencesList']
     request_list = excel_detail['reappraisalResult']['requestList']
     # 处理再鑑結果列表
@@ -157,36 +186,40 @@ def handle_reappraisal_result_list(excel_detail):
             if differentItem == '口座番号':
                 reasons = reasons + (';' if reasons != "" else "") + check_number(raw_data, data)
         resultItem['reasonCell'].value = reasons
-        excel_detail['workBook'].save(filename=excel_detail['excelName'])
+        try:
+            excel_detail['workBook'].save(filename=excel_detail['excelName'])
+        except PermissionError:
+            skip_file_list.append(excel_detail['excelName'])
+            return
     # 处理再鑑要求列表
+    check_list = [check_reserved_case, check_branch_name, check_change_case, check_preliminary]
     for request_item in request_list:
-        if request_item['type'] != '1' and request_item['type'] != 1:
-            check_reserved_case_res = check_reserved_case(request_item)
-            if check_reserved_case_res['isReserved']:
-                request_item['reason'].value = check_reserved_case_res['reason']
-                excel_detail['workBook'].save(filename=excel_detail['excelName'])
-                continue
-            check_branch_name_res = check_branch_name(request_item, request_list)
-            if check_branch_name_res['isReserved']:
-                request_item['reason'].value = check_branch_name_res['reason']
-                excel_detail['workBook'].save(filename=excel_detail['excelName'])
-                continue
-            check_change_case_res = check_change_case(request_item)
-            if check_change_case_res['isReserved']:
-                request_item['reason'].value = check_change_case_res['reason']
-                excel_detail['workBook'].save(filename=excel_detail['excelName'])
-                continue
-            check_preliminary_res = check_preliminary(request_item)
-            if check_preliminary_res['isReserved']:
-                request_item['reason'].value = check_preliminary_res['reason']
-                excel_detail['workBook'].save(filename=excel_detail['excelName'])
-                continue
+        try:
+            if request_item['type'] != '1' and request_item['type'] != 1:
+                for check in check_list:
+                    if check.__code__.co_argcount == 1:
+                        check_result = check(request_item)
+                    else:
+                        check_result = check(request_item, request_list)
+                    if check_result['isReserved']:
+                        request_item['reason'].value = check_result['reason']
+                        try:
+                            excel_detail['workBook'].save(filename=excel_detail['excelName'])
+                        except PermissionError:
+                            skip_file_list.append(excel_detail['excelName'])
+                            break
+                        continue
+        except PermissionError:
+            skip_file_list.append(excel_detail['excelName'])
+            return
 
 
 # 初始化各表数据
 def init_data(excel_list):
     global manage_excel_data
     global target_excel_list
+    print(f"加载Excel文件(xlsx、xlsm):")
+    pbar = tqdm(total=len(excel_list))
     for excel_list_item in excel_list:
         excel_detail = dataSource.load_excel(excel_list_item['name'])
         if excel_detail['type'] == 'reappraisalResult':
@@ -194,11 +227,20 @@ def init_data(excel_list):
                 target_excel_list.append(excel_detail)
         elif excel_detail['type'] == 'manage':
             manage_excel_data = excel_detail
-        else:
-            pass
+        pbar.update(1)
+    pbar.close()
 
 
 if __name__ == '__main__':
     init_data(dataSource.get_excel_list())
+    print("\n处理Excel文件:")
+    total_bar = tqdm(total=len(target_excel_list))
     for target_excel_detail in target_excel_list:
         handle_reappraisal_result_list(target_excel_detail)
+        total_bar.update(1)
+    total_bar.close()
+    print('\n')
+    for slip_file in skip_file_list:
+        print(f"文件[{slip_file}]被占用，已跳过，请关闭文件后再试")
+    print("处理完成,可以关闭程序")
+    input("按回车键退出")
