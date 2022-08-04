@@ -43,7 +43,6 @@ def load_excel(excel_name):
         "workBook": None,
         "type": "other",
         "excelName": excel_name,
-        "reappraisalResult": {}
     }
     wb = openpyxl.load_workbook(filename=excel_name)
     for sheet_item in wb.sheetnames:
@@ -145,7 +144,10 @@ def load_target_excel(excel_name, wb):
         "workBook": wb,
         "type": "reappraisalResult",
         "excelName": excel_name,
-        "reappraisalResult": load_reappraisal_result_sheet(wb)
+        "reappraisalResult": load_reappraisal_result_sheet(wb),
+        "extractionResult": load_extraction_request_sheet(wb),
+        "requestItemResult": load_request_item_sheet(wb),
+
     }
     return excel_detail
 
@@ -158,8 +160,8 @@ def load_reappraisal_result_sheet(wb):
     """
     sheet_name = '再鑑結果'
     sheet = wb[sheet_name]
+    max_row = sheet.max_row
     differences_list = []
-    request_item_list = []
     fields_info = {
         "automaticExtractionField": None,
         "idField": None,
@@ -185,11 +187,7 @@ def load_reappraisal_result_sheet(wb):
                 if None not in fields_info.values():
                     break
     if None in fields_info.values():
-        return {
-            'sheetName': sheet_name,
-            'differencesList': [],
-            'requestList': request_item_list
-        }
+        return differences_list
     # 获取条目属性
     header_row = sheet[f"{fields_info['automaticExtractionField']['row'] + 1}"]
     raw_data_props = []
@@ -205,7 +203,13 @@ def load_reappraisal_result_sheet(wb):
     # 获取差异数据
     current_idx = 0
     current_row = sheet[f"{fields_info['automaticExtractionField']['row'] + 2 + current_idx}"]
-    while re.match('\\d+', str(current_row[fields_info['idField']['col_idx'] - 1].value)) is not None:
+    while int(fields_info['automaticExtractionField']['row'] + 2 + current_idx) <= max_row:
+        if current_row[fields_info['idField']['col_idx'] - 1].value is None:
+            current_idx += 1
+            current_row = sheet[f"{fields_info['automaticExtractionField']['row'] + 2 + current_idx}"]
+            continue
+        if not re.match(r'^[\da-zA-Z]*$', str(current_row[fields_info['idField']['col_idx'] - 1].value)):
+            break
         differences_item = {
             TargetFields.idField.value: str(current_row[fields_info['idField']['col_idx'] - 1].value),
             'rawData': {},
@@ -238,20 +242,39 @@ def load_reappraisal_result_sheet(wb):
         current_idx += 1
         current_row = sheet[f"{fields_info['automaticExtractionField']['row'] + 2 + current_idx}"]
         differences_list.append(differences_item)
-    # 获取“本日が更新日の取引先の申請件数”
-    current_idx = 0
-    current_row = sheet[f"{fields_info['supplierField']['row'] + 1 + current_idx}"]
-    while re.match('\\d+', str(current_row[fields_info['idField']['col_idx'] - 1].value)) is not None:
+    return differences_list
+
+
+def load_request_item_sheet(wb):
+    sheet_name = 'S_LAR_87012089'
+    sheet = wb[sheet_name]
+    request_item_list = []
+    max_row = sheet.max_row
+    for i in range(3, max_row + 1):
+        row = sheet[f"{i}"]
+        if row[0].value is None:
+            continue
         request_item = {
-            "id": str(current_row[fields_info['idField']['col_idx'] - 1].value),
-            "type": str(current_row[fields_info['idField']['col_idx']].value),
-            "reason": current_row[fields_info['idField']['col_idx'] + 1]
+            "id": str(row[0].value),
+            "type": str(row[1].value),
+            "reason": row[2]
         }
         request_item_list.append(request_item)
-        current_idx += 1
-        current_row = sheet[f"{fields_info['supplierField']['row'] + 1 + current_idx}"]
-    return {
-        'sheetName': sheet_name,
-        'differencesList': differences_list,
-        'requestList': request_item_list
-    }
+    return request_item_list
+
+
+def load_extraction_request_sheet(wb):
+    """
+    加载"申請書からの抽出結果"表
+    :param wb: excel workbook
+    :return: 抽出結果
+    """
+    sheet_name = "申請書からの抽出結果"
+    sheet = wb[sheet_name]
+    extraction_request_list = []
+    max_row = sheet.max_row
+    for i in range(2, max_row + 1):
+        cell = sheet[f"A{i}"]
+        if cell.value is not None:
+            extraction_request_list.append(cell.value)
+    return extraction_request_list

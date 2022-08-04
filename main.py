@@ -18,35 +18,61 @@ skip_file_list = []
 
 
 def check_comp(raw_data, data):
-    temp_raw_data_str = ''
-    temp_data_str = ''
-    raw_data_str = ''
-    data_str = ''
-    for item in raw_data.split('株式会社'):
-        temp_raw_data_str = temp_raw_data_str + item
-    for item in temp_raw_data_str.split('(株)'):
-        raw_data_str = raw_data_str + item
-    for item in data.split('株式会社'):
-        temp_data_str = temp_data_str + item
-    for item in temp_data_str.split('(株)'):
-        data_str = data_str + item
-    if raw_data_str == data_str:
-        return '株式会社₌(株)'
-    else:
+    try:
+        temp_raw_data_str = ''
+        temp_data_str = ''
+        raw_data_str = ''
+        data_str = ''
+        for item in raw_data.split('株式会社'):
+            temp_raw_data_str = temp_raw_data_str + item
+        for item in temp_raw_data_str.split('(株)'):
+            raw_data_str = raw_data_str + item
+        for item in data.split('株式会社'):
+            temp_data_str = temp_data_str + item
+        for item in temp_data_str.split('(株)'):
+            data_str = data_str + item
+        if raw_data_str == data_str:
+            return '株式会社₌(株)'
+        else:
+            return ''
+    except AttributeError:
         return ''
 
 
 def check_space(raw_data, data):
-    if raw_data.strip().replace(" ", "") == data.strip().replace(" ", ""):
-        return "スペースがある"
-    else:
+    try:
+        if raw_data.strip().replace(" ", "") == data.strip().replace(" ", ""):
+            return "スペースがある"
+        else:
+            return ""
+    except AttributeError:
         return ""
 
 
 def check_number(raw_data, data):
-    if int(raw_data) == int(data):
-        return f"{data}₌{raw_data}"
-    else:
+    try:
+        if int(raw_data) == int(data):
+            if len(str(raw_data)) <= len(str(data)):
+                return f"{data}₌{raw_data}"
+            else:
+                return f"{raw_data}₌{data}"
+        else:
+            return ""
+    except TypeError:
+        return ""
+
+
+# 检查“海外申請書に預金種別がなし”
+def check_no_deposit_type(id_number, excel_detail):
+    try:
+        for extraction_result_item in excel_detail['extractionResult']:
+            number = extraction_result_item.split('＿')[0]
+            end = extraction_result_item.split('＿')[1].split('.')[0]
+            if id_number == number:
+                if end == '6002' or end == 6002:
+                    return "海外申請書に預金種別がなし"
+        return ""
+    except AttributeError:
         return ""
 
 
@@ -59,6 +85,7 @@ def check_reserved_case(request_item):
     }
     # 查询到的次数
     query_count = 0
+    c_list = []
     for domestic_item in manage_excel_data['domesticData']:
         if int(domestic_item['取引先番号\n必須']) == int(request_item['id']):
             if domestic_item['受付日'] is not None:
@@ -68,6 +95,7 @@ def check_reserved_case(request_item):
                     return check_result
                 else:
                     query_count = query_count + 1
+                    c_list.append(domestic_item)
     for foreign_item in manage_excel_data['foreignData']:
         if int(foreign_item['取引先番号\n必須']) == int(request_item['id']):
             if foreign_item['受付日'] is not None:
@@ -77,16 +105,18 @@ def check_reserved_case(request_item):
                     return check_result
                 else:
                     query_count = query_count + 1
+                    c_list.append(foreign_item)
     if query_count == 2:
-        check_result['isReserved'] = True
-        check_result['reason'] = "当日で、同じ取引先コードを不同申請書で申請された"
-        return check_result
+        if c_list[0]['申請番号必須'] != c_list[1]['申請番号必須']:
+            check_result['isReserved'] = True
+            check_result['reason'] = "当日で、同じ取引先コードを不同申請書で申請された"
+            return check_result
     else:
         return check_result
 
 
 # 检查"申請書通りに取引先名を変更する場合、枝番の取引先名も変更した"
-def check_branch_name(request_item, request_list):
+def check_branch_name(request_item, excel_detail):
     # 检查结果
     check_result = {
         "isReserved": False,
@@ -95,7 +125,7 @@ def check_branch_name(request_item, request_list):
     # 编号列表
     number_list = []
     current_id = int(request_item['id'])
-    for request_list_item in request_list:
+    for request_list_item in excel_detail['requestItemResult']:
         number_list.append(int(request_list_item['id']))
     number_list.sort()
     current_id_index = number_list.index(current_id)
@@ -169,8 +199,8 @@ def check_preliminary(request_item):
 
 def handle_reappraisal_result_list(excel_detail):
     global skip_file_list
-    result_list = excel_detail['reappraisalResult']['differencesList']
-    request_list = excel_detail['reappraisalResult']['requestList']
+    result_list = excel_detail['reappraisalResult']
+    request_list = excel_detail['requestItemResult']
     # 处理再鑑結果列表
     for resultItem in result_list:
         reasons = ""
@@ -178,13 +208,19 @@ def handle_reappraisal_result_list(excel_detail):
             raw_data = resultItem['rawData'][differentItem]
             data = resultItem['data'][differentItem]
             if differentItem == '住所':
-                reasons = reasons + (';' if reasons != "" else "") + check_space(raw_data, data)
+                res = check_space(raw_data, data)
+                reasons = reasons + (';' if reasons != "" and res != "" else "") + res
             if differentItem == '取引先名称':
-                reasons = reasons + (';' if reasons != "" else "") + check_comp(raw_data, data)
+                res = check_comp(raw_data, data)
+                reasons = reasons + (';' if reasons != "" and res != "" else "") + res
             if differentItem == '預金種別':
-                reasons = reasons + (';' if reasons != "" else "") + check_number(raw_data, data)
+                res = check_number(raw_data, data)
+                reasons = reasons + (';' if reasons != "" and res != "" else "") + res
+                res = check_no_deposit_type(resultItem['申請番号'], excel_detail)
+                reasons = reasons + (';' if reasons != "" and res != "" else "") + res
             if differentItem == '口座番号':
-                reasons = reasons + (';' if reasons != "" else "") + check_number(raw_data, data)
+                res = check_number(raw_data, data)
+                reasons = reasons + (';' if reasons != "" and res != "" else "") + res
         resultItem['reasonCell'].value = reasons
         try:
             excel_detail['workBook'].save(filename=excel_detail['excelName'])
@@ -200,14 +236,10 @@ def handle_reappraisal_result_list(excel_detail):
                     if check.__code__.co_argcount == 1:
                         check_result = check(request_item)
                     else:
-                        check_result = check(request_item, request_list)
+                        check_result = check(request_item, excel_detail)
                     if check_result['isReserved']:
                         request_item['reason'].value = check_result['reason']
-                        try:
-                            excel_detail['workBook'].save(filename=excel_detail['excelName'])
-                        except PermissionError:
-                            skip_file_list.append(excel_detail['excelName'])
-                            break
+                        excel_detail['workBook'].save(filename=excel_detail['excelName'])
                         continue
         except PermissionError:
             skip_file_list.append(excel_detail['excelName'])
