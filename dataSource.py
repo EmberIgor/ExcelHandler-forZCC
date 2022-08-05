@@ -147,7 +147,6 @@ def load_target_excel(excel_name, wb):
         "reappraisalResult": load_reappraisal_result_sheet(wb),
         "extractionResult": load_extraction_request_sheet(wb),
         "requestItemResult": load_request_item_sheet(wb),
-
     }
     return excel_detail
 
@@ -246,6 +245,11 @@ def load_reappraisal_result_sheet(wb):
 
 
 def load_request_item_sheet(wb):
+    """
+    加载请求条目sheet数据
+    :param wb: workbook
+    :return: sheet概况、各条目信息
+    """
     sheet_name = 'S_LAR_87012089'
     sheet = wb[sheet_name]
     request_item_list = []

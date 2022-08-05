@@ -1,3 +1,8 @@
 .idea/
 __pycache__/
 ~$testExcel.xlsx
+build/
+dist/
+venv/
+ax3il-ymwhr-001.ico
+*.spec

@@ -1,5 +1,3 @@
-import os
-
 import dataSource
 import time
 from tqdm import tqdm
